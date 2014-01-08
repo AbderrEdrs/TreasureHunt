@@ -1,0 +1,25 @@
+body {
+	padding: 50px;
+}
+
+#create_hunt{
+	margin-left: 20%;
+	display: none;
+	padding: 16px 14px;
+	margin-top:100px;
+	margin-bottom: 14px;
+	background-color: #f7f7f9;
+	border: 1px solid #e1e1e8;
+	border-radius: 4px;
+	height: 100px;
+	width: 800px;
+}
+
+#create_hunt p {
+	width: 500px;
+	height: 20px;
+}
+
+#create_hunt p span {
+	margin-right: 50px;
+}
