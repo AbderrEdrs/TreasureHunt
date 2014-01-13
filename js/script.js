@@ -22,7 +22,7 @@ domHelp = {
 	}
 }
 
-var database;
+var database,hunts= [];
 application = {};
 
 // base de donnée
@@ -30,55 +30,15 @@ application = {};
 application.Database =	function()
 {
 	var  database = openDatabase('TH', '1.0', 'Treasure Hunt', 2000000);
-
-	this.init =	function()
-	{
+	this.init =	function(){
 		database.transaction(function(t){t.executeSql('CREATE TABLE IF NOT EXISTS hunt(id INTEGER PRIMARY KEY AUTOINCREMENT, name)');});
 		database.transaction(function(t){t.executeSql('CREATE TABLE IF NOT EXISTS question(id INTEGER PRIMARY KEY AUTOINCREMENT, id_hunt, question, code)');});
 	};
-
-	this.reset = function()
-	{
+	this.reset = function(){
 		database.transaction(function(tx){tx.executeSql('DROP TABLE question');});
 		database.transaction(function(tx){tx.executeSql('DROP TABLE hunt');});
 	};
-
 	this.getdatabase = function(){return database;};
-
-	this.getHuntsData =	function(action)
-	{
-		var generateData =	function(t, data)
-		{
-			var hunts = [];
-
-			for (var i = 0; i < data.rows.length; i++)
-			{
-				var item = data.rows.item(i);
-				hunts.push({id : item.id, name : item.name});
-			}
-
-			action(hunts);
-		};
-
-		database.readTransaction(function(t){t.executeSql('SELECT * FROM hunt', [], generateData)});
-	};
-
-	this.getHunt =	function(id, action)
-	{
-		var generateHunt =	function(t, data)
-		{
-			var hunt = new application.TreasureHunt(data.rows.item(0).name);
-
-			for (var i = 0; i < data.rows.length; i++)
-			{
-				hunt.addQuestion(new application.Question(data.rows.item(i).question, data.rows.item(i).code));
-			}
-
-			action(hunt);
-		};
-
-		database.readTransaction(function(t){t.executeSql('SELECT * FROM hunt INNER JOIN question ON hunt.id = question.id_hunt where hunt.id = ' + id, [], generateHunt)});
-	};
 };
 
 // Button
@@ -122,7 +82,6 @@ application.Field = function (_screen, _name, _parent, parameters) {
 
 	var label=domHelp.addElement(newLine,"span");
 	var labelText=domHelp.addText(label,(parameters.label?parameters.label:""));
-	ttt=labelText;
 
 	parameters.name=name;
 	var ele=this.createActualField(newLine, parameters);
@@ -148,10 +107,11 @@ application.TextField = function (_screen,_name, _parent, parameters) {
 application.TextField.prototype = new application.Field();
 application.TextField.prototype.inputType="text";
 application.TextField.prototype.createActualField = function (parent, parameters) {
-	var textField=domHelp.addElement(parent,"input",this.inputType);
+	var textField=domHelp.addElement(parent,"input","type",this.inputType,"value"," ");
 	if (parameters.hint)
 		textField.setAttribute("placeholder",parameters.hint);
-	textField.setAttribute('class',"form-control")
+	textField.setAttribute('class',"form-control");
+	textField.setAttribute('name',parameters.name);
 	this.__defineGetter__("hint", function () {return textField.getAttribute("placeholder");});
 	this.__defineSetter__("hint", function (value) {textField.setAttribute("placeholder",value);});
 }
@@ -161,11 +121,13 @@ application.TextField.prototype.createActualField = function (parent, parameters
 application.Row = function (_screen, _name, _parent, parameters) {
 	if (!_screen) 
 		return;
-	var parent = _parent;
+	var parent= document.getElementsByTagName("tbody").item(0);
 	var screen = _screen;
 	var name=_name;
-	
 	var newLine=domHelp.addElement(parent,"tr");
+	
+	var td_number=domHelp.addElement(newLine,"td");
+	var labelTextNumber=domHelp.addText(td_number,(parameters.hunt_id?parameters.hunt_id:""));
 
 	var td_name=domHelp.addElement(newLine,"td");
 	var labelTextName=domHelp.addText(td_name,(parameters.hunt_name?parameters.hunt_name:""));
@@ -174,10 +136,25 @@ application.Row = function (_screen, _name, _parent, parameters) {
 	var labelText=domHelp.addText(td_nb_questions,(parameters.nb_questions?parameters.nb_questions:""));
 	
 	var td_action=domHelp.addElement(newLine,"td");
+	buttonAction = new application.Button(screen, "answerButton", td_action, "Répondre", "btn btn-success");
+	buttonAction.getButton().addEventListener('click',{
+		id : parameters.hunt_id,
+		handleEvent :	function(){	
+			var ws = new application.Database();
+			var db = ws.getdatabase();
+			db.readTransaction(function(tx){
+				tx.executeSql('SELECT * FROM hunt INNER JOIN question ON hunt.id = question.id_hunt where hunt.id = '+this.id, [], function (tx, results) {
+						// var screen = new application.Screen();
+						// screen.cleanShowDiv();
+						console.log(results.rows);
 
-	parameters.name=name;
-	var textField=this.createActualField(newLine, parameters);
-		
+						screen.show_div_answer_question(results.rows.item(0));
+						screen.div_create_hunt.style.display = "block";
+				});  	
+			});
+		}},
+		false);
+	
 	this.__defineGetter__("td_name", function () {return labelTextName.data;});
 	this.__defineSetter__("td_name", function (value) {labelTextName.data=value;});
 	this.__defineGetter__("td_nb_questions", function () {return td_nb_questions.data;});
@@ -285,7 +262,7 @@ application.Screen.prototype = {
 	},
 	addButtonAction : function (name, label) {
 		var class_style = "btn btn-success";
-		this.allElements[name]= new application.Button(this, name, this.header, label, class_style);
+		this.allElements[name]= new application.Button(this, name, this.tbody, label, class_style);
 	},
 	show_div_create_hunt: function (){
 		var textField = new application.TextField(this, 'hunt', this.div_create_hunt,{ label : "Nom du hunt :", hint : "Nom du hunt à indiquer" });
@@ -293,11 +270,12 @@ application.Screen.prototype = {
 		var buttonCancel = new application.Button(this, 'cancel', this.div_create_hunt, "Annuler", "btn btn-danger");
 
 		buttonCreate.getButton().addEventListener('click',{
+			textFields : textField,
 			handleEvent :	function(){
+				var hunt = new application.TreasureHunt(this.textFields.value);
+				hunt.persist();
 				screen = new application.Screen();
 				screen.cleanShowDiv();
-				var hunt = new application.TreasureHunt(this.value);
-				hunt.persist();
 				screen.show_div_add_question(hunt);
 			},
 			input : textField.getElemet()
@@ -318,20 +296,64 @@ application.Screen.prototype = {
 		var textFieldQuestion = new application.TextField(this, 'question', this.div_create_hunt,{ label : "Question :", hint : "Question" });
 		var textFieldCode = new application.TextField(this, 'code', this.div_create_hunt,{ label : "Code :", hint : "Code" });
 		var buttonCreateQustion = new application.Button(this, 'createQuestion', this.div_create_hunt, "Terminer", "btn btn-success");
-		var buttonCancel = new application.Button(this, 'createQuestionOther', this.div_create_hunt, "Ajouter une question", "btn btn-primary");
+		var buttonCreateOther = new application.Button(this, 'createQuestionOther', this.div_create_hunt, "Ajouter une question", "btn btn-primary");
 
 		buttonCreateQustion.getButton().addEventListener('click',{
-			textFieldQuestions : textFieldQuestion.getElemet(),
-			textFieldCodes : textFieldCode.getElemet(),
+			textFieldQuestions : textFieldQuestion,
+			textFieldCodes : textFieldCode,
 			hunt : hunt,
 			handleEvent :	function(){
-				screen = new application.Screen();
-				screen.div_create_hunt.style.display = "none";
-				var question = new application.Question(this.textFieldQuestions.value, this.textFieldCodes.value);
-				screen.cleanShowDiv();
+				var question = new application.Question(
+					this.textFieldQuestions.value, 
+					this.textFieldCodes.value);
+				
 				this.hunt.addQuestion(question);
+				screen = new application.Screen();
+				screen.cleanShowDiv();
+				screen.div_create_hunt.style.display = "none";
 			}},
 			false);
+
+		buttonCreateOther.getButton().addEventListener('click',{
+			hunt:hunt,
+			handleEvent :	function(){
+				screen = new application.Screen();
+				screen.cleanShowDiv();
+				screen.show_div_add_question(this.hunt);
+			}},
+		false);
+	},
+	show_div_answer_question: function(hunt){
+		//var question = hunt.next;
+		var textFieldQuestion = new application.TextField(this, 'answerQuestion', this.div_create_hunt,{ label : "Question :", hint : "Question" });
+		var textFieldCode = new application.TextField(this, 'answerCode', this.div_create_hunt,{ label : "Code :", hint : "Code" });
+		var buttonValidateQustion = new application.Button(this, 'validate', this.div_create_hunt, "Valider", "btn btn-success");
+
+		buttonValidateQustion.getButton().addEventListener('click',{
+			//code : question.code,
+			textFieldCodes : textFieldCode,
+			hunt : hunt,
+			handleEvent :	function()
+			{
+				if (this.textFieldCodes.value == 'this.code'){
+					screen = new application.Screen();
+					screen.cleanShowDiv();
+					screen.show_div_answer_question(this.hunt);
+				}else
+					alert("Vous réponse est incorrecte!");
+			}},
+			false);
+	},
+	create_list_hunts: function (){
+		var db = database.getdatabase()
+		db.readTransaction(function(tx){
+			tx.executeSql('SELECT *, COUNT(question.id) AS nb_questions FROM hunt INNER JOIN question ON hunt.id = question.id_hunt GROUP BY hunt.id', [], function (tx, results) {
+			  	var len = results.rows.length, i;
+				for (i = 0; i < len; i++) {
+					var row = new application.Row(this, 'hunt', this.tbody, {hunt_id:results.rows.item(i).id,hunt_name:results.rows.item(i).name,nb_questions:results.rows.item(i).nb_questions});
+			  	}
+			});  	
+		});
 	}
 
 }
@@ -343,6 +365,7 @@ window.onload = function () {
 	screen=new application.Screen();
 	screen.addTitle("Treasure Hunt");
 	screen.addButtonCreateHunt ("showCreatHunt", "Créer un nouveau Hunt");
+	screen.create_list_hunts();
 
 }
 
