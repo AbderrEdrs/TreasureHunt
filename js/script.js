@@ -37,7 +37,7 @@ application.Database =	function()
 
 	this.init =	function(){
 		database.transaction(function(t){t.executeSql('CREATE TABLE IF NOT EXISTS hunt(id INTEGER PRIMARY KEY AUTOINCREMENT, name)');});
-		database.transaction(function(t){t.executeSql('CREATE TABLE IF NOT EXISTS question(id INTEGER PRIMARY KEY AUTOINCREMENT, question, code, , id_hunt)');});
+		database.transaction(function(t){t.executeSql('CREATE TABLE IF NOT EXISTS question(id INTEGER PRIMARY KEY AUTOINCREMENT, question, code, id_hunt)');});
 	};
 
 	this.getdatabase = function(){return database;};
@@ -215,19 +215,19 @@ application.TreasureHunt =	function(_name)
 	var name = _name;
 	var questions = [];
 
-	var db = database.getdatabase();
+	this.db = database.getdatabase();
 
 	this.__defineGetter__('id', function(){return id;});
 	this.__defineGetter__('name', function(){return name;});
 
 	this.save =	function(){
-		db.transaction(function(t){t.executeSql('INSERT INTO hunt(name) VALUES ("' + name + '")');});
-		db.readTransaction(function(t){t.executeSql('SELECT max(id) as id FROM hunt', [], function(t, data){id = data.rows.item(0).id})});
+		this.db.transaction(function(t){t.executeSql('INSERT INTO hunt(name) VALUES ("' + name + '")');});
+		this.db.readTransaction(function(t){t.executeSql('SELECT max(id) as id FROM hunt', [], function(t, data){id = data.rows.item(0).id})});
 	};
 
 	this.addQuestion =	function(question){
 		questions.push(question);
-		db.transaction(function(t){t.executeSql('INSERT INTO question(question, code, id_hunt) VALUES ("' + question.question + '", "' + question.code + '",' + id + ')');});
+		this.db.transaction(function(t){t.executeSql('INSERT INTO question(question, code, id_hunt) VALUES ("' + question.question + '", "' + question.code + '",' + id + ')');});
 	};
 };
 // SCREEN
@@ -397,6 +397,7 @@ application.Screen.prototype = {
 
 window.onload = function () {
 	database = new application.Database();
+	//database.clean();
 	database.init();
 	screen=new application.Screen();
 	screen.addTitle("Treasure Hunt");
